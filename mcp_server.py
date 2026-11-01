@@ -13,10 +13,10 @@ from x402.mechanisms.evm.exact.register import register_exact_evm_client
 mcp = FastMCP("Data4Agents")
 
 # Configuration
-API_BASE_URL = os.environ.get("TARGET_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+API_BASE_URL = os.environ.get("TARGET_API_BASE_URL", "")
 API_KEY = os.environ.get("DATA4AGENTS_API_KEY", "")
 PRIVATE_KEY = os.environ.get("WALLET_PRIVATE_KEY", "")
-NETWORK = os.environ.get("NETWORK", "eip155:84532")
+NETWORK = os.environ.get("NETWORK", "")
 
 # Reusable Literal Types for Dropdowns
 RegionType = Literal["us-east", "us-west", "ap-southeast", "ap-northeast", "eu-central", "eu-west"]
