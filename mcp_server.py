@@ -1,85 +1,115 @@
 import os
-import requests
+import httpx
+from typing import Optional, Literal
 from mcp.server.fastmcp import FastMCP
 from web3 import Web3
 
+# Import x402 SDK components
+from x402 import x402Client
+from x402.http.clients import x402HttpxClient
+from x402.mechanisms.evm import EthAccountSigner
+from x402.mechanisms.evm.exact.register import register_exact_evm_client
+
 mcp = FastMCP("Data4Agents")
 
-API_BASE_URL = "https://api.data4agents.dev/v1"
+# Configuration
+API_BASE_URL = os.environ.get("TARGET_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 API_KEY = os.environ.get("DATA4AGENTS_API_KEY", "")
 PRIVATE_KEY = os.environ.get("WALLET_PRIVATE_KEY", "")
-RPC_URL = os.environ.get("RPC_URL", "https://mainnet.base.org") # Example default to Base network
-USDC_ADDRESS = os.environ.get("USDC_CONTRACT_ADDRESS", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
+NETWORK = os.environ.get("NETWORK", "eip155:84532")
 
-# Minimal ERC-20 ABI for USDC transfers
-USDC_ABI = [
-    {"constant": False, "inputs": [{"name": "_to", "type": "address"}, {"name": "_value", "type": "uint256"}], "name": "transfer", "outputs": [{"name": "", "type": "bool"}], "type": "function"}
-]
+# Reusable Literal Types for Dropdowns
+RegionType = Literal["us-east", "us-west", "ap-southeast", "ap-northeast", "eu-central", "eu-west"]
+ProviderType = Literal["Qwen", "Volcano Ark", "Zhipu", "DeepSeek", "MiniMax", "Moonshot"]
+CategoryType = Literal["general", "image", "video"]
 
-def pay_x402_invoice(recipient: str, amount_usdc: str) -> str:
-    """Executes a Web3 USDC transfer and returns the transaction hash."""
-    if not PRIVATE_KEY:
-        raise ValueError("WALLET_PRIVATE_KEY is required to process x402 payments.")
+# Initialize x402 client if a private key is provided
+x402_http = None
+if PRIVATE_KEY:
+    pk_bytes = bytes.fromhex(PRIVATE_KEY.removeprefix("0x"))
+    w3 = Web3()
+    account = w3.eth.account.from_key(pk_bytes)
+    evm_signer = EthAccountSigner(account=account)
+    
+    client = x402Client()
+    register_exact_evm_client(client, signer=evm_signer, networks=[NETWORK])
+    x402_http = x402HttpxClient(x402_client=client)
 
-    w3 = Web3(Web3.HTTPProvider(RPC_URL))
-    account = w3.eth.account.from_key(PRIVATE_KEY)
-    contract = w3.eth.contract(address=USDC_ADDRESS, abi=USDC_ABI)
+async def make_authed_request(endpoint: str, params: dict) -> str:
+    """Routes requests through standard HTTP (if API Key) or the x402 SDK (if Web3)."""
+    url = f"{API_BASE_URL}/v1{endpoint}"
     
-    # USDC uses 6 decimals
-    amount_atomic = int(float(amount_usdc) * 10**6)
-    
-    tx = contract.functions.transfer(Web3.to_checksum_address(recipient), amount_atomic).build_transaction({
-        'from': account.address,
-        'nonce': w3.eth.get_transaction_count(account.address),
-        'gas': 100000,
-        'gasPrice': w3.eth.gas_price
-    })
-    
-    signed_tx = w3.eth.account.sign_transaction(tx, PRIVATE_KEY)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    
-    # Wait for settlement confirmation
-    w3.eth.wait_for_transaction_receipt(tx_hash)
-    return tx_hash.hex()
-
-def make_authed_request(endpoint: str, params: dict) -> str:
-    """Wraps requests to automatically handle 402 Payment Required challenges."""
-    url = f"{API_BASE_URL}{endpoint}"
-    headers = {"Authorization": f"Bearer {API_KEY}"} if API_KEY else {}
-    
-    response = requests.get(url, params=params, headers=headers)
-    
-    # Handle the x402 Micropayment Loop
-    if response.status_code == 402:
-        invoice = response.json()
-        invoice_id = invoice["invoice_id"]
+    # 1. Strict Priority: API Key Mode
+    if API_KEY and API_KEY.strip() != "":
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "X-API-Key": API_KEY
+        }
+        async with httpx.AsyncClient() as std_client:
+            try:
+                response = await std_client.get(url, params=params, headers=headers)
+                
+                if response.status_code == 402:
+                    return f"HTTP 402 Error: API Key was provided but rejected (invalid or zero credits). Web3 fallback disabled to prevent accidental spend. Raw Response: {response.text}"
+                
+                if response.status_code != 200:
+                    return f"HTTP {response.status_code} Error: {response.text}"
+                    
+                return response.text
+            except Exception as e:
+                return f"Request Failed: {str(e)}"
+                
+    # 2. Autonomous Micropayment Mode (x402 SDK)
+    if not x402_http:
+        return "Configuration Error: No DATA4AGENTS_API_KEY or WALLET_PRIVATE_KEY provided."
         
-        # Execute payment
-        tx_hash = pay_x402_invoice(invoice["recipient_wallet"], invoice["amount_usdc"])
+    try:
+        # The x402HttpxClient automatically handles 402 intercepts, payments, and retries
+        response = await x402_http.get(url, params=params)
         
-        # Retry with X402 proof
-        headers["Authorization"] = f"X402 {invoice_id}:{tx_hash}"
-        response = requests.get(url, params=params, headers=headers)
-        
-    return response.text
+        if response.status_code != 200:
+            return f"HTTP {response.status_code} Error: {response.text}"
+            
+        return response.text
+    except Exception as e:
+        return f"x402 Autonomous Payment Failed: {str(e)}"
 
 @mcp.tool()
-def get_realtime_prices(provider: str = None, model_type: str = None, model: str = None) -> str:
+async def get_health() -> str:
+    """Verify API health, network configurations, protocol versions, and accepted asset contracts."""
+    try:
+        url = f"{API_BASE_URL}/health"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            
+            if response.status_code != 200:
+                return f"HTTP {response.status_code} Error: {response.text}"
+                
+            return response.text
+    except Exception as e:
+        return f"Health Check Request Failed: {str(e)}"
+
+@mcp.tool()
+async def get_realtime_prices(
+    provider: Optional[ProviderType] = None, 
+    model_type: Optional[CategoryType] = None, 
+    model: Optional[str] = None
+) -> str:
     """Fetch real-time LLM market pricing, 30-day trends, and caching tiers."""
     params = {k: v for k, v in {"provider": provider, "model_type": model_type, "model": model}.items() if v}
-    return make_authed_request("/prices/realtime", params)
+    return await make_authed_request("/prices/realtime", params)
 
 @mcp.tool()
-def recommend_fastest_model(category: str, region: str = "us-east") -> str:
+async def recommend_fastest_model(category: CategoryType, region: RegionType = "us-east") -> str:
     """Get ranked model recommendations based on live latency and cost metrics."""
     params = {"category": category, "region": region}
-    return make_authed_request("/router/recommend", params)
+    return await make_authed_request("/router/recommend", params)
 
 @mcp.tool()
-def get_live_status(region: str = "us-east", provider: str = None) -> str:
+async def get_live_status(region: RegionType = "us-east", provider: Optional[ProviderType] = None) -> str:
     """Check real-time provider latency metrics (TTFT, tokens/sec)."""
     params = {k: v for k, v in {"region": region, "provider": provider}.items() if v}
-    return make_authed_request("/status/live", params)
+    return await make_authed_request("/status/live", params)
 
 if __name__ == "__main__":
     mcp.run()

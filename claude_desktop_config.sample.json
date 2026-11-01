@@ -6,9 +6,9 @@
         "/absolute/path/to/data4agents-mcp/mcp_server.py"
       ],
       "env": {
+        "TARGET_API_BASE_URL": "https://api.data4agents.dev",
+        "NETWORK": "eip155:8453",
         "WALLET_PRIVATE_KEY": "0xYourBurnerKeyWithFunds",
-        "RPC_URL": "https://sepolia.base.org",
-        "USDC_CONTRACT_ADDRESS": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
         "DATA4AGENTS_API_KEY": ""
       }
     }
