@@ -1,8 +1,12 @@
 import os
 import httpx
+from dotenv import load_dotenv # Add this
 from typing import Optional, Literal
 from mcp.server.fastmcp import FastMCP
 from web3 import Web3
+
+# Load variables from .env file directly
+load_dotenv(".env")
 
 # Import x402 SDK components
 from x402 import x402Client
@@ -13,10 +17,16 @@ from x402.mechanisms.evm.exact.register import register_exact_evm_client
 mcp = FastMCP("Data4Agents")
 
 # Configuration
-API_BASE_URL = os.environ.get("TARGET_API_BASE_URL", "")
-API_KEY = os.environ.get("DATA4AGENTS_API_KEY", "")
-PRIVATE_KEY = os.environ.get("WALLET_PRIVATE_KEY", "")
-NETWORK = os.environ.get("NETWORK", "")
+# Strip accidental shell quotes and trailing slashes
+raw_url = os.environ.get("TARGET_API_BASE_URL", "http://127.0.0.1:8000")
+if not raw_url: 
+    raw_url = "http://127.0.0.1:8000"
+API_BASE_URL = raw_url.strip("\"'").rstrip("/")
+if not API_BASE_URL.startswith("http"):
+    API_BASE_URL = f"http://{API_BASE_URL}"
+API_KEY = os.environ.get("DATA4AGENTS_API_KEY", "").strip("\"'")
+PRIVATE_KEY = os.environ.get("WALLET_PRIVATE_KEY", "").strip("\"'")
+NETWORK = os.environ.get("NETWORK", "").strip("\"'")
 
 # Reusable Literal Types for Dropdowns
 RegionType = Literal["us-east", "us-west", "ap-southeast", "ap-northeast", "eu-central", "eu-west"]
