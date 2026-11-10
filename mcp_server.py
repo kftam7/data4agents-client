@@ -113,13 +113,13 @@ async def get_realtime_prices(
 async def recommend_fastest_model(category: CategoryType, region: RegionType = "us-east") -> str:
     """Get ranked model recommendations based on live latency and cost metrics."""
     params = {"category": category, "region": region}
-    return await make_authed_request("/router/recommend", params)
+    return await make_authed_request("/models/recommend", params)
 
 @mcp.tool()
 async def get_live_status(region: RegionType = "us-east", provider: Optional[ProviderType] = None) -> str:
     """Check real-time provider latency metrics (TTFT, tokens/sec)."""
     params = {k: v for k, v in {"region": region, "provider": provider}.items() if v}
-    return await make_authed_request("/status/live", params)
+    return await make_authed_request("/latency/global", params)
 
 if __name__ == "__main__":
     mcp.run()

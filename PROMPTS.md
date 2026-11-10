@@ -31,7 +31,7 @@ If your agent is interacting with the Data4Agents REST API directly (without our
 You have access to the Data4Agents real-time LLM market data feed at `https://api.data4agents.dev`. 
 This API is monetized via the autonomous x402 protocol. Do not ask the user for a traditional API key. 
 
-When you need to query `/v1/prices/realtime`, `/v1/router/recommend`, or `/v1/status/live`, follow this exact execution loop:
+When you need to query `/v1/prices/realtime`, `/v1/models/recommend`, or `/v1/latency/global`, follow this exact execution loop:
 1. **Initial Request:** Make the GET request with your desired query parameters.
 2. **Intercept 402:** Expect a `402 Payment Required` response containing a JSON invoice object.
 3. **Parse Invoice:** Extract `invoice_id`, `amount`, `payTo` (recipient wallet), and `network` from the 402 response body (`detail.accepts` array).
@@ -53,7 +53,7 @@ If your agent is interacting directly with the REST API using a standard fiat su
 # Data4Agents API Instructions
 You have access to the Data4Agents real-time LLM market data feed at `https://api.data4agents.dev`.
 
-Whenever you query `/v1/prices/realtime`, `/v1/router/recommend`, or `/v1/status/live`, you must authenticate the request using the provided API Key.
+Whenever you query `/v1/prices/realtime`, `/v1/models/recommend`, or `/v1/latency/global`, you must authenticate the request using the provided API Key.
 
 Include the key in your HTTP requests using either of the following headers:
 - `Authorization: Bearer <API_KEY>`
