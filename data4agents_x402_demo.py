@@ -38,9 +38,9 @@ BASE_URL = os.getenv("TARGET_API_BASE_URL", "https://api.data4agents.dev").rstri
 
 # Endpoints to test the payment loop against
 ENDPOINTS_TO_TEST = [
-    {"path": "/v1/status/live", "params": {"region": "us-east"}},
+    {"path": "/v1/latency/global", "params": {"region": "us-east"}},
     {"path": "/v1/prices/realtime", "params": {"provider": "Qwen"}},
-    {"path": "/v1/router/recommend", "params": {"category": "general", "region": "us-east"}},
+    {"path": "/v1/models/recommend", "params": {"category": "general", "region": "us-east"}},
 ]
 
 async def test_endpoint(x402_http, base_url, endpoint):
