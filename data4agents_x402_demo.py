@@ -11,6 +11,7 @@ pip install x402 httpx web3 python-dotenv
 import os
 import sys
 import json
+import base64
 import traceback
 import logging
 import asyncio
@@ -61,13 +62,20 @@ async def test_endpoint(x402_http, base_url, endpoint):
         payment_response_raw = resp.headers.get("PAYMENT-RESPONSE")
         if payment_response_raw:
             try:
-                pr_data = json.loads(payment_response_raw)
-                tx_hash = pr_data.get("tx_hash")
-                print(f"[STAGE 3] 📜 Server acknowledged payment! TX Hash: {tx_hash}")
+                # 1. Base64-decode the string before parsing as JSON
+                decoded_str = base64.b64decode(payment_response_raw).decode("utf-8")
+                pr_data = json.loads(decoded_str)
                 
-                # Dynamically provide the correct block explorer link
-                explorer = "basescan.org" if "8453" in NETWORK and "84532" not in NETWORK else "sepolia.basescan.org"
-                print(f"🔗 Explorer Link: https://{explorer}/tx/{tx_hash}")
+                # 2. Extract the correct 'transaction' key mapped in main.py
+                tx_hash = pr_data.get("transaction")
+                
+                if tx_hash:
+                    print(f"[STAGE 3] 📜 Server acknowledged payment! TX Hash: {tx_hash}")
+                    # Dynamically provide the correct block explorer link
+                    explorer = "basescan.org" if "8453" in NETWORK and "84532" not in NETWORK else "sepolia.basescan.org"
+                    print(f"🔗 Explorer Link: https://{explorer}/tx/{tx_hash}")
+                elif pr_data.get("settled"):
+                    print(f"[STAGE 3] 📜 Server acknowledged payment! Status: Settled")
             except Exception as e:
                 print(f"Cannot decode PAYMENT-RESPONSE JSON: {e}")
         else:
